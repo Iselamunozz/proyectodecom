@@ -1,0 +1,10 @@
+# Ignorar todo
+*
+
+# Permitir estos archivos/carpetas
+!bask_modulacion.py
+!generadores/
+!generadores/**
+
+# Mantener este archivo
+!.gitignore
