@@ -1,30 +1,35 @@
 import numpy as np
 
-def cos_elevado(sps, rolloff, span):
+def rrc_filter(beta, sps, span):
     """
-    Filtro Raised Cosine (coseno elevado)
-    sps: samples per symbol
-    rolloff: factor de rolloff (0 <= α <= 1)
-    span: duración en símbolos (ej. 6)
+    Filtro Root Raised Cosine (RRC)
+    beta : roll-off (0 a 1)
+    sps  : samples per symbol (sobremuestreo)
+    span : duración en símbolos
     """
-    N = sps * span + 1
-    t = np.arange(-span/2, span/2 + 1/sps, 1/sps)
+    N = span * sps
+    t = np.arange(-N/2, N/2 + 1) / sps
     h = np.zeros_like(t)
 
     for i, ti in enumerate(t):
-        if abs(ti) < 1e-8:
-            h[i] = 1.0
-        elif abs(abs(4 * rolloff * ti) - 1) < 1e-8:
-            # Caso singular: t = ±1/(4α)
-            h[i] = (np.pi/4) * np.sinc(1/(2*rolloff))
+
+        # ti = 0
+        if np.isclose(ti, 0.0):
+            h[i] = 1.0 + beta*(4/np.pi - 1)
+
+        # ti = ± Ts/(4β)
+        elif beta != 0 and np.isclose(abs(ti), 1/(4*beta)):
+            h[i] = (beta/np.sqrt(2)) * (
+                (1 + 2/np.pi) * np.sin(np.pi/(4*beta)) +
+                (1 - 2/np.pi) * np.cos(np.pi/(4*beta))
+            )
+
         else:
-            num = np.sin(np.pi * ti * (1 - rolloff)) + 4 * rolloff * ti * np.cos(np.pi * ti * (1 + rolloff))
-            den = np.pi * ti * (1 - (4 * rolloff * ti)**2)
-            h[i] = num / den
+            num = (np.sin(np.pi*ti*(1 - beta)) +
+                   4*beta*ti*np.cos(np.pi*ti*(1 + beta)))
+            den = (np.pi*ti*(1 - (4*beta*ti)**2))
+            h[i] = num / (den + 1e-12)
 
-    h /= np.sum(h)  # normalización unitaria
+    # Normalizar energía
+    h = h / np.sqrt(np.sum(h**2))
     return h
-def eliminar_delay(signal, h):
-    delay = (len(h) - 1) // 2
-    return signal[delay:-delay]
-

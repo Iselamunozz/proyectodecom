@@ -8,3 +8,4 @@ def generate_canalisi(length=3, attenuation=0.5):
     """
     h = [attenuation**i for i in range(length)]
     return np.array(h) / np.sum(h)
+
