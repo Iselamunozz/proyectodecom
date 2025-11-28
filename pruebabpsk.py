@@ -13,7 +13,7 @@ fs = Rb * sps
 fc = 5000
 beta = 0.25
 span = 30
-snr_db = 10
+snr_db = 1000
 
 # ==============================
 # 2. BITS Y MODULACIÓN BPSK
@@ -68,7 +68,8 @@ rx_pb, h_chan = canal_kumar_variable(
     tx_signal=tx_pb,
     tipo_fading='Rician',
     nivel_isi='nulo',
-    snr_db=snr_db
+    snr_db=snr_db,
+    max_fase=np.pi/16
 )
 
 # ==============================
@@ -80,31 +81,41 @@ rx_bb = np.convolve(rx_mix, rrc, mode='full')
 # ==============================
 # 8. ALINEACIÓN Y CORRECCIÓN DE FASE
 # ==============================
+# ==============================
+# 8. ALINEACIÓN Y CORRECCIÓN DE FASE (CORREGIDO)
+# ==============================
+# 1. Calcular el retardo de los filtros (RRC TX + RRC RX)
 delay_rrc = (len(rrc) - 1) // 2
 delay_total = 2 * delay_rrc
 
-rx_bb_aligned = rx_bb[delay_total:delay_total + len(upsampled)]
-tx_bb_aligned = tx_bb[delay_rrc:delay_rrc + len(upsampled)]
+# 2. Recortar para quitar los transitorios de los filtros
+# Nota: Usamos slice seguro para evitar errores de índice
+start_idx = delay_total
+end_idx = delay_total + len(upsampled)
+rx_bb_aligned = rx_bb[start_idx : end_idx]
+tx_bb_aligned = tx_bb[delay_rrc : delay_rrc + len(upsampled)]
 
-# === CORRECCIÓN DE FASE antes de normalizar ===
-fase_promedio = np.angle(np.mean(rx_bb_aligned**2))
-rx_bb_aligned *= np.exp(-1j * fase_promedio)
+# 3. CORRECCIÓN DE FASE FINA (Algoritmo de Potencia par BPSK)
+# Elevamos al cuadrado para quitar la modulación (0->0, 180->360)
+signal_squared = rx_bb_aligned**2
+doble_error_fase = np.angle(np.mean(signal_squared)) # Esto es 2*theta
 
-rx_bb_aligned = rx_bb[delay_total:delay_total + len(upsampled)]
-tx_bb_aligned = tx_bb[delay_rrc:delay_rrc + len(upsampled)]
+# IMPORTANTE: Dividir por 2 para obtener el error real
+error_fase = doble_error_fase / 2.0
 
-# CORRECCIÓN DE FASE previa
-fase_promedio = np.angle(np.mean(rx_bb_aligned**2))
-rx_bb_aligned *= np.exp(-1j * fase_promedio)
+# Aplicar la corrección
+rx_bb_aligned = rx_bb_aligned * np.exp(-1j * error_fase)
 
-# 🔽 PON ESTO AQUÍ:
-sign_correlation = np.sign(np.real(np.vdot(rx_bb_aligned, tx_bb_aligned)))
-if sign_correlation < 0:
-    print("⚠️ Corrigiendo desfase de 180° (π rad)")
+# 4. CORRECCIÓN DE AMBIGÜEDAD DE 180 GRADOS
+# Como elevamos al cuadrado, no sabemos si corregimos hacia 0 o hacia 180.
+# Usamos la señal conocida (tx_bb) para verificar la orientación.
+proyeccion = np.real(np.vdot(rx_bb_aligned, tx_bb_aligned))
+
+if proyeccion < 0:
+    print("⚠️ Ambigüedad de fase detectada: Rotando 180°")
     rx_bb_aligned *= -1
 
-
-# === Normalización ===
+# === Normalización final ===
 rx_bb_aligned /= np.max(np.abs(rx_bb_aligned))
 tx_bb_aligned /= np.max(np.abs(tx_bb_aligned))
 
