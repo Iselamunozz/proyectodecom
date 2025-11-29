@@ -14,7 +14,7 @@ fc = 5000
 beta = 0.25
 span = 30
 snr_db = 1000
-M = 8  # M-PSK (usa 2 para BPSK, 4 para QPSK, 8, etc.)
+M = 2  # M-PSK (usa 2 para BPSK, 4 para QPSK, 8, etc.)
 
 # =====================
 # FUNCIONES DE MODULACIÓN
